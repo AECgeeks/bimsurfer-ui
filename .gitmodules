@@ -1,0 +1,6 @@
+[submodule "src/v2"]
+	path = src/v2
+	url = https://github.com/AECgeeks/BIMsurfer2/
+[submodule "src/v3"]
+	path = src/v3
+	url = https://github.com/AECgeeks/BIMsurfer3/
