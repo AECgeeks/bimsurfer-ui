@@ -1,6 +1,7 @@
 import EventHandler from './v2/bimsurfer/src/EventHandler.js';
 import SvgViewer from './v2/bimsurfer/src/SvgViewer.js';
 import ThreeViewer from './v2/bimsurfer/src/ThreeViewer.js';
+import { AbstractViewer } from './v3/viewer/abstractviewer.js';
 
 // Helper function to traverse over the mappings for individually loaded models
 function _traverseMappings(mappings) {
@@ -24,15 +25,22 @@ export default class BimSurfer extends EventHandler {
       svg: SvgViewer,
       xeogl: window.XeoViewer,
       threejs: ThreeViewer,
+      bimsurfer3: AbstractViewer
     }[this.engine];
 
-    this.viewer = new engine(Object.assign(this.cfg, {app: this}));
+    if (this.engine === "bimsurfer3") {
+      let c = document.createElement('canvas');
+      document.querySelector(`#${this.cfg.domNode}`).appendChild(c);
+      this.viewer = new engine({autoResize: false}, c, c.offsetWidth, c.offsetHeight);
+    } else {
+      this.viewer = new engine(Object.assign(this.cfg, {app: this}));
+    }    
 
     /**
          * Fired whenever this BIMSurfer's camera changes.
          * @event camera-changed
          */
-    this.viewer.on('camera-changed', (...args) => {
+     this.viewer.on && this.viewer.on('camera-changed', (...args) => {
       this.fire('camera-changed', args);
     });
 
@@ -40,7 +48,7 @@ export default class BimSurfer extends EventHandler {
          * Fired whenever this BIMSurfer's selection changes.
          * @event selection-changed
          */
-    this.viewer.on('selection-changed', (...args) => {
+     this.viewer.on && this.viewer.on('selection-changed', (...args) => {
       this.fire('selection-changed', args);
     });
 
@@ -63,10 +71,12 @@ export default class BimSurfer extends EventHandler {
       return this._loadFromServer(params);
     } else if (params.api) {
       return this._loadFromAPI(params);
-    } else if (params.src && ((window.XeoViewer && this.viewer instanceof XeoViewer) || this.viewer instanceof ThreeViewer)) {
-      return this._loadFrom_glTF(params);
     } else if (params.src && this.viewer instanceof SvgViewer) {
       return this._loadFrom_SVG(params);
+    } else if (params.src) {
+      return this._loadFrom_glTF(params);
+    } else {
+      throw new Error("Unrecognized params");
     }
   }
 
@@ -148,9 +158,8 @@ export default class BimSurfer extends EventHandler {
       let maxActiveProcessesEncountered = 0;
       let oldProgress = 0;
       return new Promise((resolve, reject) => {
-        const m = this.viewer.loadglTF(params.src);
-
         if (window.XeoViewer && this.viewer instanceof XeoViewer) {
+          const m = this.viewer.loadglTF(params.src);
           m.on('loaded', () => {
             this.viewer.scene.canvas.spinner.on('processes', (n) => {
               if (n === 0) {
@@ -167,7 +176,8 @@ export default class BimSurfer extends EventHandler {
               oldProgress = progress;
             });
           });
-        } else {
+        } else if (this.viewer instanceof ThreeViewer) {
+          const m = this.viewer.loadglTF(params.src);
           this.viewer.on('loaded', () => {
             resolve(this.viewer);
 
@@ -175,6 +185,8 @@ export default class BimSurfer extends EventHandler {
               this.viewer.setVisibility({ids: this.viewer.getObjectIds(), visible: false});
             }
           });
+        } else {
+          this.viewer.loadGltf({url: `${params.src}.glb`});
         }
       });
     }
@@ -425,6 +437,6 @@ export default class BimSurfer extends EventHandler {
   }
 
   resize() {
-    this.viewer.resize();
+    this.viewer.resize && this.viewer.resize();
   }
 }

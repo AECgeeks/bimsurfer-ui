@@ -23,6 +23,7 @@ document.addEventListener('DOMContentLoaded', () => {
     modelPath: modelName,
     withTreeVisibilityToggle: true,
     withTreeViewIcons: true,
+    withShadows: true
   });
 
   v.load2d();

@@ -43,7 +43,10 @@ export default class MultiModalViewer extends EventHandler {
 
     this.bimSurfer3d = new BimSurfer({
       domNode: this.args.domNode,
-      engine: 'threejs',
+      engine: args.engine3d || 'threejs',
+      // engine: 'bimsurfer3',
+      withShadowMaps: !!args.withShadows,
+      // withSSAO: true,
       initiallyInvisible: this.args.viewerInitiallyInvisible,
       disableSelection: this.args.viewerInitiallyInvisible,
     });
