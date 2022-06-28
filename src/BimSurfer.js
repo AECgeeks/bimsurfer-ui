@@ -186,7 +186,7 @@ export default class BimSurfer extends EventHandler {
             }
           });
         } else {
-          this.viewer.loadGltf({url: `${params.src}.glb`});
+          this.viewer.loadGltf({url: `${params.src}.unoptimized.glb`});
         }
       });
     }
