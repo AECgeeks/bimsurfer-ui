@@ -208,7 +208,7 @@ export default class BimSurfer extends EventHandler {
           });
         } else {
           let postfix = params.fromPipeline ? ".unoptimized" : "";
-          this.viewer.loadGltf({url: `${params.src}${postfix}.glb`, defer: true});
+          this.viewer.loadGltf({url: `${params.src}${postfix}.glb`, defer: true}).then(resolve);
         }
       });
     }
