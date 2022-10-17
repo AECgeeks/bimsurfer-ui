@@ -97,20 +97,14 @@ export default class MultiModalViewer extends EventHandler {
   }
 
   mapTo(view, objectIds) {
-    // we now just always map to base64 guids
-    // if (view instanceof StaticTreeRenderer|| view instanceof MetaDataRenderer || view.engine === 'xeogl' || view.engine == 'threejs') {
-    if (true) {
-      const conditionallyCompress = (s) => {
-        if (s.length > 22) {
-          return Utils.CompressGuid(s);
-        } else {
-          return s;
-        }
-      };
-      return objectIds.map(conditionallyCompress);
-    } else {
-      return objectIds;
-    }
+    const conditionallyCompress = (s) => {
+      if (s.length > 22) {
+        return Utils.CompressGuid(s.replace('product-', ''));
+      } else {
+        return s;
+      }
+    };
+    return objectIds.map(conditionallyCompress);
   }
 
   processSelectionEvent(source, args0, args1) {
@@ -222,7 +216,8 @@ export default class MultiModalViewer extends EventHandler {
         tree.on('selection-changed', makePartial(this.processSelectionEvent.bind(this), tree));
         tree.on('visibility-changed', this.bimSurfer3d.setVisibility.bind(this.bimSurfer3d));
         tree.on('selection-context-changed', (args) => {
-          if (args.secondary) {
+          // Currently only the ThreeJS viewer has support for selection context
+          if (this.bimSurfer3d.engine === 'threejs' && args.secondary) {
             this.bimSurfer3d.setSelection(args);
           }
           if (args.parent && this.metaDataView) {
@@ -312,7 +307,7 @@ export default class MultiModalViewer extends EventHandler {
       if (this.args.n_files) {
         src += '_' + i;
       }
-      var P = this.bimSurfer3d.load({src: src}).then(this.decrementRequestsInProgress.bind(this));
+      var P = this.bimSurfer3d.load({src: src, ...this.args}).then(this.decrementRequestsInProgress.bind(this));
     }
 
     this.bimSurfer3d.on('selection-changed', makePartial(this.processSelectionEvent.bind(this), this.bimSurfer3d));
@@ -335,8 +330,16 @@ export default class MultiModalViewer extends EventHandler {
     this.performOnViewers((v) => {
       if (colorArgs.ids && colorArgs.ids.length) {
         if (colorArgs.highlight) {
-          if (v.viewer && v.viewer.getObjectIds) {
-            v.setColor({ids: v.viewer.getObjectIds(), color: {a: 0.1}});
+          if (v.viewer) {
+            let obIds;
+            if (v.viewer.getObjectIds) {
+              obIds = v.viewer.getObjectIds();
+            } else if (v.viewer.viewer && v.viewer.viewer.viewObjectsByName) {
+              obIds = Array.from(v.viewer.viewer.viewObjectsByName.keys()).filter(x => x);
+            }
+            if (obIds) {
+              v.setColor({ids: obIds.filter(x => colorArgs.ids.indexOf(x) === -1), color: {a: 0.03}});
+            }
           }
         }
         v.setColor(colorArgs);

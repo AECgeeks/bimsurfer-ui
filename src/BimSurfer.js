@@ -1,6 +1,7 @@
 import EventHandler from './v2/bimsurfer/src/EventHandler.js';
 import SvgViewer from './v2/bimsurfer/src/SvgViewer.js';
 import ThreeViewer from './v2/bimsurfer/src/ThreeViewer.js';
+import * as Utils from './v2/bimsurfer/src/Utils.js';
 import { AbstractViewer } from './v3/viewer/abstractviewer.js';
 
 // Helper function to traverse over the mappings for individually loaded models
@@ -32,25 +33,45 @@ export default class BimSurfer extends EventHandler {
       let c = document.createElement('canvas');
       document.querySelector(`#${this.cfg.domNode}`).appendChild(c);
       this.viewer = new engine({autoResize: false}, c, c.offsetWidth, c.offsetHeight);
+      this.viewer.viewer.nameFunction = (vo) => {
+        if (vo.data && vo.data.name) {
+          return Utils.CompressGuid(vo.data.name.substr(8, 36));
+        }
+      }
     } else {
       this.viewer = new engine(Object.assign(this.cfg, {app: this}));
     }    
 
     /**
-         * Fired whenever this BIMSurfer's camera changes.
-         * @event camera-changed
-         */
-     this.viewer.on && this.viewer.on('camera-changed', (...args) => {
+     * Fired whenever this BIMSurfer's camera changes.
+     * @event camera-changed
+     */
+    this.viewer.on && this.viewer.on('camera-changed', (...args) => {
+      console.log('camera-changed', args)
+      this.fire('camera-changed', args);
+    });
+
+    this.viewer.viewer && this.viewer.viewer.eventHandler && this.viewer.viewer.eventHandler.on('camera_changed', (...args) => {
+      console.log('camera-changed', args)
       this.fire('camera-changed', args);
     });
 
     /**
-         * Fired whenever this BIMSurfer's selection changes.
-         * @event selection-changed
-         */
-     this.viewer.on && this.viewer.on('selection-changed', (...args) => {
+     * Fired whenever this BIMSurfer's selection changes.
+     * @event selection-changed
+     */
+    this.viewer.on && this.viewer.on('selection-changed', (...args) => {
+      console.log('selection-changed', args);
       this.fire('selection-changed', args);
-    });
+    });    
+    
+    if (this.viewer.viewer && this.viewer.viewer.eventHandler) {
+      const b3SelectionHandler = () => {
+        this.fire('selection-changed', [{objects: this.viewer.getSelection(), selected: true, clear: true}]);
+      };
+      this.viewer.viewer.eventHandler.on('selection_state_changed', b3SelectionHandler);
+      this.viewer.viewer.eventHandler.on('selection_state_set', b3SelectionHandler);
+    }
 
     // This are arrays as multiple models might be loaded or unloaded.
     this._idMapping = {
@@ -395,7 +416,11 @@ export default class BimSurfer extends EventHandler {
      * @param params
      */
   reset(params) {
-    this.viewer.reset(params);
+    if (this.viewer.reset) {
+      this.viewer.reset(params);
+    } else if (this.viewer.viewer.resetColor && params.colors) {
+      this.viewer.viewer.resetColor();
+    }
   }
 
   /**
@@ -438,6 +463,10 @@ export default class BimSurfer extends EventHandler {
   }
 
   resize() {
-    this.viewer.resize && this.viewer.resize();
+    if (this.viewer.autoResizeCanvas) {
+      this.viewer.autoResizeCanvas();
+    } else {
+      this.viewer.resize();
+    }
   }
 }
