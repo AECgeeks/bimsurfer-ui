@@ -78,9 +78,34 @@
           width: 100%;
           height: 100%;
       }
+      canvas:focus-visible {
+          outline: none;
+      }
+      .button {
+          border: solid 1px #ddd;
+          border-radius: 4px;
+          display: inline-block;
+          cursor: pointer;
+          width: 240px;
+          padding: 4px;
+          font-size: 14pt;
+          line-height: 20pt;
+          text-align: center;
+      }
+      .button:hover {
+          border-color: #bbb;
+          background: #f0f0f0;
+      }
+      .button .material-icons {
+          vertical-align: middle;
+      }
     </style>
 </head>
 <body>
+
+<div class="button" id="changeEngine" style="position: absolute; right: 25%; bottom: 0">
+    <span class="material-icons">video_settings</span> Toggle engine
+</div>
 
 <h1>BIMsurfer v2.2 demo</h1>
 
@@ -94,6 +119,16 @@
     <div id="viewerContainer"></div>
     <div id="dataContainer" class="bimsurfer-metadata"></div>
 </div>
+
+<script>
+    document.querySelector("#changeEngine").onclick = () => {
+        let engine = localStorage.getItem("engine") || "threejs";
+        let engines = ["threejs", "bimsurfer3"];
+        engine = engines.filter(x => x != engine)[0];
+        localStorage.setItem("engine", engine);
+        window.location = window.location;
+    }
+</script>
 
 </body>
 </html>
