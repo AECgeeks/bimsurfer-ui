@@ -7,7 +7,7 @@ export function Make(args) {
       console.log(args.url, xhr.readyState, xhr.status);
       if (xhr.readyState === 4) {
         if (xhr.status === 200) {
-          if (xhr.getResponseHeader('content-type') == 'application/json') {
+          if (xhr.getResponseHeader('content-type').indexOf('application/json') === 0) {
             resolve(JSON.parse(xhr.responseText));
           } else {
             resolve(xhr.responseXML);
