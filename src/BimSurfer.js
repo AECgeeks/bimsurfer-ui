@@ -47,12 +47,10 @@ export default class BimSurfer extends EventHandler {
      * @event camera-changed
      */
     this.viewer.on && this.viewer.on('camera-changed', (...args) => {
-      console.log('camera-changed', args)
       this.fire('camera-changed', args);
     });
 
     this.viewer.viewer && this.viewer.viewer.eventHandler && this.viewer.viewer.eventHandler.on('camera_changed', (...args) => {
-      console.log('camera-changed', args)
       this.fire('camera-changed', args);
     });
 
