@@ -23,6 +23,7 @@ document.addEventListener('DOMContentLoaded', () => {
     modelPath: modelName,
     withTreeVisibilityToggle: true,
     withTreeViewIcons: true,
+    treeLoadUntil: 3,
     withShadows: true,
     engine3d: localStorage.getItem('engine') || 'threejs'
   });

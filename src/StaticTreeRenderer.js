@@ -1,6 +1,7 @@
 import * as Request from './Request.js';
 import EventHandler from './v2/bimsurfer/src/EventHandler.js';
 import * as Utils from './v2/bimsurfer/src/Utils.js';
+import { AbstractViewer } from './v3/viewer/abstractviewer.js';
 
 const SPATIAL_STRUCTURE_ELEMENTS = ['IfcProject', 'IfcSite', 'IfcBuilding', 'IfcBuildingStorey', 'IfcSpace'];
 
@@ -8,6 +9,16 @@ export const TOGGLE = 0;
 export const SELECT = 1;
 export const SELECT_EXCLUSIVE = 2;
 export const DESELECT = 3;
+
+const memoize = (fn) => {
+  let cache = null;
+  return () => {
+    if (cache) {
+      return cache;
+    }
+    return cache = fn();
+  }
+}
 
 export class StaticTreeRenderer extends EventHandler {
   constructor(args) {
@@ -105,14 +116,14 @@ export class StaticTreeRenderer extends EventHandler {
       }
 
       if (s) {
-        this.domNodes[id].label.classList.add('selected');
+        this.domNodes[id]().label.classList.add('selected');
       } else {
-        this.domNodes[id].label.classList.remove('selected');
+        this.domNodes[id]().label.classList.remove('selected');
       }
     });
 
     let desiredViewRange = this.getSelected().map((id) => {
-      return this.getOffset(this.domNodes[id].label);
+      return this.getOffset(this.domNodes[id]().label);
     });
 
     if (desiredViewRange.length) {
@@ -282,19 +293,122 @@ export class StaticTreeRenderer extends EventHandler {
       let duplicateNameWrapper;
       if (this.args.singleLevel) {
         duplicateNameWrapper = document.createElement('div');
-        d.appendChild(duplicateNameWrapper);
-        d = duplicateNameWrapper;
+        d().appendChild(duplicateNameWrapper);
+        d = () => duplicateNameWrapper;
       }
 
-      const label = document.createElement('div');
-      const children = document.createElement('div');
-      let eye;
+      let renderToNode = () => {
+        const label = document.createElement('div');
+        const children = document.createElement('div');
+        let eye;
 
-      if (this.args.withVisibilityToggle) {
-        eye = this.eyeNodes[qid] = document.createElement('i');
-        eye.className = 'bimsurfer-tree-eye material-icons';
-        label.appendChild(eye);
+        if (this.args.withVisibilityToggle) {
+          eye = this.eyeNodes[qid] = document.createElement('i');
+          eye.className = 'bimsurfer-tree-eye material-icons';
+          label.appendChild(eye);
+        }
+
+        if (this.args.singleLevel) {
+          const k = `l${level}-${nm}`;
+          let li = itemsByLevelByName[k] = itemsByLevelByName[k] || [];
+          if (li.length) {
+            duplicateNameWrapper.classList.add('duplicate-name');
+          } else {
+            firstOrrenceOfDuplicateName[k] = qid;
+          }
+          li.push(d());
+  
+          const qid0 = firstOrrenceOfDuplicateName[k];
+          li = duplicateNameIdsById[qid0] = duplicateNameIdsById[qid0] || [];
+          li.push(qid);
+        } else {
+          label.className = 'bimsurfer-tree-label';
+          const label_collapse = document.createElement('i');
+          label_collapse.className = 'collapse material-icons';
+          label.appendChild(label_collapse);
+          if ((n.children || []).filter((x) => !x['xlink:href']).length) {
+            const collapsedByType = (this.args.expandUntil || []).indexOf(n.type) !== -1;
+            const collapsedByLevel = this.args.loadUntil ? level == this.args.loadUntil : false;
+            if (collapsedByType || collapsedByLevel) {
+              d().classList.toggle('bimsurfer-tree-node-collapsed');
+            }
+  
+            label_collapse.onclick = (evt) => {
+              evt.stopPropagation();
+              evt.preventDefault();
+
+              d().classList.toggle('bimsurfer-tree-node-collapsed');
+
+              // Load child nodes if not loaded yet.
+              (this.parentToChildMapping[qid] || []).forEach(siblingId => this.domNodes[siblingId]());
+            };
+          } else {
+            label_collapse.style.visibility = 'hidden';
+          }
+        }
+
+        const nm = n.label || n.name || n.guid;
+
+        const label_icon = document.createElement('i');
+        label_icon.className = 'icon material-icons';
+        label_icon.innerHTML = this.icons[n.type];
+        label.appendChild(label_icon);
+        label.appendChild(document.createTextNode(nm));
+
+        d().appendChild(label);
+        if (!this.args.singleLevel) {
+          children.className = 'bimsurfer-tree-children-with-indent';
+          d().appendChild(children);
+        }
+
+        if (eye) {
+          eye.onclick = (evt) => {
+            evt.stopPropagation();
+            evt.preventDefault();
+  
+            const visible = !eye.classList.toggle('bimsurfer-tree-eye-off');
+            const descendants = this.collect(qid);
+            const fn = visible ? DOMTokenList.prototype.remove : DOMTokenList.prototype.add;
+            descendants.forEach((s) => {
+              fn.call(this.domNodes[s]().eye.classList, 'bimsurfer-tree-eye-off');
+            });
+  
+            this.fire('visibility-changed', [{visible: visible, ids: descendants}]);
+  
+            return false;
+          };
+        };
+      
+        label.onclick = (evt) => {
+          evt.stopPropagation();
+          evt.preventDefault();
+  
+          const clear = this.args.app ? this.args.app.shouldClearSelection(evt) : !evt.shiftKey;
+  
+          const ids = mergeMode ? this.collect(...duplicateNameIdsById[qid]) : this.collect(qid);
+          this.setSelected(ids, clear ? SELECT_EXCLUSIVE : TOGGLE, true);
+          this.fire('click', [qid, this.getSelected(true)]);
+  
+          return false;
+        };
+
+        if (!this.processingSiblings && this.domNodes[qid]) {
+          // In this case we know we're being lazily evaluated. Run created code for siblings as well.
+          //
+          // We do need to make sure we're not runnign this recursively for the siblings of siblings,
+          // hence this flag:
+          this.processingSiblings = true;
+          (this.parentToChildMapping[this.childParentMapping[qid]] || []).filter(x => x != qid).forEach(siblingId => this.domNodes[siblingId]());
+          this.processingSiblings = false;
+
+          // We also expand the parent by default. Because it may have been collapsed.
+          this.domNodes[this.childParentMapping[qid]]().label.parentNode.classList.remove('bimsurfer-tree-node-collapsed');
+        }       
+
+        return {label: label, eye: eye, children: children};
       }
+
+      renderToNode = memoize(renderToNode);
 
       if (!parentId) {
         this.roots.push(qid);
@@ -303,102 +417,33 @@ export class StaticTreeRenderer extends EventHandler {
         this.childParentMapping[qid] = parentId;
       }
 
-      const nm = n.label || n.name || n.guid;
-
-      if (this.args.singleLevel) {
-        const k = `l${level}-${nm}`;
-        let li = itemsByLevelByName[k] = itemsByLevelByName[k] || [];
-        if (li.length) {
-          duplicateNameWrapper.classList.add('duplicate-name');
-        } else {
-          firstOrrenceOfDuplicateName[k] = qid;
-        }
-        li.push(d);
-
-        const qid0 = firstOrrenceOfDuplicateName[k];
-        li = duplicateNameIdsById[qid0] = duplicateNameIdsById[qid0] || [];
-        li.push(qid);
-      } else {
-        label.className = 'bimsurfer-tree-label';
-        const label_collapse = document.createElement('i');
-        label_collapse.className = 'collapse material-icons';
-        label.appendChild(label_collapse);
-        if ((n.children || []).filter((x) => !x['xlink:href']).length) {
-          if ((this.args.expandUntil || []).indexOf(n.type) !== -1) {
-            d.classList.toggle('bimsurfer-tree-node-collapsed');
-          }
-
-          label_collapse.onclick = (evt) => {
-            evt.stopPropagation();
-            evt.preventDefault();
-            d.classList.toggle('bimsurfer-tree-node-collapsed');
-          };
-        } else {
-          label_collapse.style.visibility = 'hidden';
-        }
-      }
-
-      const label_icon = document.createElement('i');
-      label_icon.className = 'icon material-icons';
-      label_icon.innerHTML = this.icons[n.type];
-      label.appendChild(label_icon);
-
-      label.appendChild(document.createTextNode(nm));
-
       this.objectTypeMapping[qid] = n.type;
 
-      d.appendChild(label);
-      if (!this.args.singleLevel) {
-        children.className = 'bimsurfer-tree-children-with-indent';
-        d.appendChild(children);
+      if (!this.args.loadUntil || level <= this.args.loadUntil) {
+        let result = renderToNode();
+        this.domNodes[qid] = () => result;
+      } else {
+        this.domNodes[qid] = renderToNode;
       }
-
-      this.domNodes[qid] = {label: label, eye: eye};
-
-      if (eye) {
-        eye.onclick = (evt) => {
-          evt.stopPropagation();
-          evt.preventDefault();
-
-          const visible = !eye.classList.toggle('bimsurfer-tree-eye-off');
-          const descendants = this.collect(qid);
-          const fn = visible ? DOMTokenList.prototype.remove : DOMTokenList.prototype.add;
-          descendants.forEach((s) => {
-            fn.call(this.domNodes[s].eye.classList, 'bimsurfer-tree-eye-off');
-          });
-
-          this.fire('visibility-changed', [{visible: visible, ids: descendants}]);
-
-          return false;
-        };
-      }
-
-      label.onclick = (evt) => {
-        evt.stopPropagation();
-        evt.preventDefault();
-
-        const clear = this.args.app ? this.args.app.shouldClearSelection(evt) : !evt.shiftKey;
-
-        const ids = mergeMode ? this.collect(...duplicateNameIdsById[qid]) : this.collect(qid);
-        this.setSelected(ids, clear ? SELECT_EXCLUSIVE : TOGGLE, true);
-        this.fire('click', [qid, this.getSelected(true)]);
-
-        return false;
-      };
 
       for (let i = 0; i < (n.children || []).length; ++i) {
-        const child = n.children[i];
-        if (this.fromXml) {
-          if (child['xlink:href']) continue;
-          // if (child.type === "IfcOpeningElement") continue;
-        }
+        (() => {
+          const child = n.children[i];
+          if (this.fromXml) {
+            if (child['xlink:href']) return;
+            // if (child.type === "IfcOpeningElement") continue;
+          }
 
-        const d2 = document.createElement('div');
-        d2.className = 'item';
-        d2.classList.add(`level-${level+1}`);
-        (this.args.singleLevel ? parent_d : children).appendChild(d2);
+          let createParentDiv = memoize(() => {
+            const d2 = document.createElement('div');
+            d2.className = 'item';
+            d2.classList.add(`level-${level+1}`);
+            (this.args.singleLevel ? parent_d : renderToNode().children).appendChild(d2);
+            return d2;
+          });
 
-        buildNode(modelId, qid, parent_d, d2, child, level+1);
+          buildNode(modelId, qid, parent_d, createParentDiv, child, level+1);
+        })();
       }
     };
 
@@ -427,7 +472,7 @@ export class StaticTreeRenderer extends EventHandler {
 
           const loadModelFromJson = (json) => {
             const project = Utils.FindNodeOfType(json, 'decomposition')[0].children[0];
-            buildNode(m.id, null, column1, row1cell, project, 0);
+            buildNode(m.id, null, column1, () => row1cell, project, 0);
           };
 
           const fn = m.src ? loadModelFromSource : loadModelFromJson;

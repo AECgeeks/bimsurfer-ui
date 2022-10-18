@@ -194,6 +194,7 @@ export default class MultiModalViewer extends EventHandler {
       withVisibilityToggle: this.args.withTreeVisibilityToggle,
       singleLevel: this.args.withThreeSingleLevel,
       expandUntil: this.args.treeExpandUntil,
+      loadUntil: this.args.treeLoadUntil,
       app: this,
     });
 
